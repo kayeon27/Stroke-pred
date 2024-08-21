@@ -226,6 +226,20 @@ svm_model <-
 ```
 
 ```{r}
+params <- parameters(lr_model)
+params2 <- parameters(svm_model)
+params3 <-parameters(svm_model_rbf)
+```
+```{r}
+rf_grid <- grid_random(mtry(range = c(1,10)),size = 10)
+#lr_grid <- grid_random(params,size = 10)
+nb_grid <- grid_random(smoothness(range = c(0, 1)),Laplace(range = c(0, 1)), size = 10)
+svm_grid <- grid_random(params2, size = 10)
+svm_rbf_grid <- grid_random(params3, size = 10)
+```
+
+
+```{r}
 install.packages(discrim)
 library(discrim)
 ```
@@ -269,18 +283,6 @@ add_formula(class ~ .)
 #add_recipe(stroke_recipe)
 ```
 
-```{r}
-params <- parameters(lr_model)
-params2 <- parameters(svm_model)
-params3 <-parameters(svm_model_rbf)
-```
-```{r}
-rf_grid <- grid_random(mtry(range = c(1,10)),size = 10)
-#lr_grid <- grid_random(params,size = 10)
-nb_grid <- grid_random(smoothness(range = c(0, 1)),Laplace(range = c(0, 1)), size = 10)
-svm_grid <- grid_random(params2, size = 10)
-svm_rbf_grid <- grid_random(params3, size = 10)
-```
 
 ```{r}
 set.seed(123)
@@ -290,8 +292,32 @@ print(data_folds$splits[[1]])
 
 
 ```{r}
-dt_results <-dt_workflow %>%
-tune_grid(resamples = data_folds, grid = dt_grid)
+# Définir les métriques
+metrics <- metric_set(accuracy, roc_auc, sens, f_meas)
+```
+
+
+```{r}
+#rechercher les hyperparamettre
+rf_tune_results <- rf_workflow%>%
+  tune_grid( resamples = data_folds,grid = rf_grid,
+             metrics = metrics)
+#lr_results <-lr_workflow%>%
+ # tune_grid(resamples = data_folds, grid = lr_grid, 
+ #           metrics = metrics)
+nb_results <-nb_workflow%>%
+  tune_grid(resamples = data_folds, grid = nb_grid, 
+            metrics = metrics)
+svm_results <-svm_workflow%>%
+  tune_grid(resamples = data_folds, grid = svm_grid, 
+            metrics = metrics)
+svm_rbf_results <-svm_rbf_workflow%>%
+  tune_grid(resamples = data_folds, grid = svm_rbf_grid,
+            metrics = metrics)
+```
+
+
+```{r}
 rf_tune_results%>% collect_metrics()
 #lr_results%>% collect_metrics()
 nb_results %>% collect_metrics()
@@ -299,12 +325,111 @@ svm_results %>% collect_metrics()
 svm_rbf_results %>% collect_metrics()
 ```
 
+```{r}
+# Ajouter une colonne pour identifier chaque modèle
+rf_tune_results <- rf_tune_results %>% mutate(model = "Random Forest")
+#lr_results <- lr_results %>% mutate(model = "Logistic Regression")
+nb_results <- nb_results %>% mutate(model = "Naive Bayes")
+svm_results <- svm_results%>% mutate(model= "SVM")
+svm_rbf_results <- svm_rbf_results%>%mutate(model = "SVM_RBF")
+```
+
+```{r}
+# Combiner les résultats
+all_results <- bind_rows(rf_tune_results, nb_results,svm_results,svm_rbf_results)
+all_results
+```
+```{r}
+# Sélectionner les meilleurs hyperparamètres pour chaque modèle
+best_rf <- rf_tune_results%>%select_best(metric = "accuracy")
+#best_lr <- lr_results%>%select_best(metric = "accuracy")
+best_nb <- nb_results%>%select_best(metric = "accuracy")
+best_svm <- svm_results%>%select_best(metric = "accuracy")
+best_svm_rbf <- svm_rbf_results%>%select_best(metric = "accuracy")
+```
+```{r}
+# Finaliser les flux de travail
+workflow_rf_final <- rf_workflow %>%
+  finalize_workflow(best_rf)
+#workflow_lr_final <- lr_workflow %>%
+ # finalize_workflow(best_lr)
+workflow_nb_final <- nb_workflow %>%
+  finalize_workflow(best_nb)
+workflow_svm_final <- svm_workflow %>%
+  finalize_workflow(best_svm)
+workflow_svm_rbf_final <- svm_rbf_workflow %>%
+  finalize_workflow(best_svm_rbf)
+```
+
+```{r}
+# Ajuster les modèles finaux avec les meilleurs paramètres
+final_fit_rf <- fit(workflow_rf_final, data = data_train)
+#final_fit_lr <- fit(workflow_lr_final, data = data_train)
+final_fit_nb <- fit(workflow_nb_final, data = data_train)
+final_fit_svm <- fit(workflow_svm_final, data = data_train)
+final_fit_svm_rbf <- fit(workflow_svm_rbf_final, data = data_train)
+```
+
+
 
 # Task Three: Evaluate and select prediction models
 
 ```{r}
+# Prédictions
+pred_rf <- predict(final_fit_rf, data_test) %>%
+  bind_cols(data_test) %>%
+  bind_cols(predict(final_fit_rf, data_test, type = "prob"))
+pred_nb <- predict(final_fit_nb, data_test) %>%
+  bind_cols(data_test) %>%
+  bind_cols(predict(final_fit_nb, data_test, type = "prob"))
+pred_svm <- predict(final_fit_svm, data_test) %>%
+  bind_cols(data_test) %>%
+  bind_cols(predict(final_fit_svm, data_test, type = "prob"))
+pred_svm_rbf <- predict(final_fit_svm_rbf, data_test) %>%
+  bind_cols(data_test) %>%
+  bind_cols(predict(final_fit_svm_rbf, data_test, type = "prob"))
+```
+
+```{r}
+# Calculer les métriques pour chaque modèle
+metrics_rf <- metrics(pred_rf,truth = class, estimate = .pred_class, .pred_1)
+metrics_nb <- metrics(pred_nb, truth = class, estimate = .pred_class, .pred_1)
+metrics_svm <- metrics(pred_svm, truth = class, estimate = .pred_class, .pred_1)
+metrics_svm_rbf <- metrics(pred_svm_rbf, truth = class, estimate = .pred_class, .pred_1)
 
 ```
+
+```{r}
+#combinaison pour comparaison
+combined_metrics <- bind_rows(
+metrics_rf %>% mutate(model = "Random Forest"),
+metrics_nb %>% mutate(model = "Naives Bayes"),
+metrics_svm %>% mutate(model = "SVM"),
+metrics_svm_rbf %>% mutate(model = "SVM_RBF")
+)
+```
+```{r}
+print(combined_metrics)
+```
+
+```{r}
+#choisir le meilleur model en fonction des metriques
+
+# Trouver le modèle avec le meilleur F1-score
+best_f1_model <- combined_metrics %>%
+filter(.metric == "f_meas") %>%
+arrange(desc(.estimate)) %>%
+slice(1)
+# Trouver le modèle avec la meilleure accuracy
+best_acc_model <- combined_metrics %>%
+filter(.metric == "accuracy") %>%
+arrange(desc(.estimate)) %>%
+slice(1)
+# Afficher les résultats
+print(best_f1_model)
+print(best_acc_model)
+```
+
 
 
 
