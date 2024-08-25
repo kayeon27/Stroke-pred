@@ -45,10 +45,6 @@ filename <- "C:/Users/healthcare-dataset-stroke-data.csv"
 dataset <- read.csv(filename, header=TRUE, sep = ";")
 dataset
 ```
-```{r}
-
-```
-
 
 
 ## Describe and explore the data
@@ -76,8 +72,10 @@ geom_histogram(aes(x = avg_glucose_level))
 data_prep <- dataset
 # Convertir la variable char en num
 data_prep$bmi <- as.numeric(data_prep$bmi)
+
+#mutation de variables 
 data_prep <- data_prep%>%
-mutate(smoking_status = if_else(tolower(smoking_status) == "formerly smoked",
+  mutate(smoking_status = if_else(tolower(smoking_status) == "formerly smoked",
                                 "smokes",
                                 if_else(tolower(smoking_status) == "unknown",
                                         NA_character_, 
@@ -88,6 +86,7 @@ data_prep
 
 
 ```{r}
+#suppression de variables
 data_prep1 <- subset(data_prep, gender != "Other")
 data_prep1
 ```
@@ -103,6 +102,7 @@ data_prep1
 
 
 ```{r}
+#imputation de la moyenne aux valeurs manquante BMI
 data_prep1$bmi <- ifelse(is.na(data_prep1$bmi),
 mean(data_prep1$bmi, na.rm = TRUE),
 data_prep1$bmi)
@@ -116,6 +116,8 @@ mutate(bmi = round(bmi, 1))
 #step_dummy(all_nominal(), -all_outcomes()) %>%
 #step_normalize(all_numeric())
 #step_impute_knn(all_predictors())
+
+#suppression des autres valeurs manquante
 data_prep2<- na.omit(data_prep1)
 print(data_prep2)
 #stroke_recipe
@@ -126,13 +128,15 @@ ggplot(data_prep2)+
 geom_histogram(aes(x=bmi))
 ```
 ```{r}
+#chargement des variables  numeriques
 data_numeric <- data_prep2[sapply(data_prep2, is.numeric)]
+
 # Calculer la matrice de corrélation
 cor_matrix <- cor(data_numeric, use = "complete.obs")
 corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 ```
 ```{r}
-# summarize the class distribution
+# Resumer la distribution de classz
 percentage <- prop.table(table(data_prep2$stroke)) * 100
 cbind(freq=table(data_prep2$stroke), percentage=percentage)
 ```
@@ -164,7 +168,7 @@ table(data_balanced$class)
 print(head(data_balanced))
 ```
 ```{r}
-# summarize the class distribution
+# resumé de la distribution des classes après rééquilibrage
 percentage <- prop.table(table(data_balanced$class)) * 100
 cbind(freq=table(data_balanced$class), percentage=percentage)
 ```
@@ -226,11 +230,14 @@ svm_model <-
 ```
 
 ```{r}
+#definition des parametres 
 params <- parameters(lr_model)
 params2 <- parameters(svm_model)
 params3 <-parameters(svm_model_rbf)
 ```
+
 ```{r}
+#definir les grilles de paramettres
 rf_grid <- grid_random(mtry(range = c(1,10)),size = 10)
 #lr_grid <- grid_random(params,size = 10)
 nb_grid <- grid_random(smoothness(range = c(0, 1)),Laplace(range = c(0, 1)), size = 10)
@@ -245,6 +252,7 @@ library(discrim)
 ```
 
 ```{r}
+
 rf_workflow <- workflow()%>%
 add_model(rf_model)%>%
 add_formula(class ~ .)
@@ -318,6 +326,8 @@ svm_rbf_results <-svm_rbf_workflow%>%
 
 
 ```{r}
+#collecte des metriques de nos modeles
+
 rf_tune_results%>% collect_metrics()
 #lr_results%>% collect_metrics()
 nb_results %>% collect_metrics()
@@ -430,22 +440,64 @@ print(best_f1_model)
 print(best_acc_model)
 ```
 
+```{r}
+#visualisation
+ggplot(combined_metrics, aes(x = model, y = .estimate, fill = .metric)) +
+geom_bar(stat = "identity", position = "dodge") +
+labs(title = "Comparaison_Performances_Modeles",
+y = "Valeur_metrique",
+x = "Modele")
+```
 
 
 
 # Task Four: Deploy the prediction model
 
 ```{r}
-
+install.packages("vetiver")
+install.packages("devtools")
+devtools::install_github("tidymodels/vetiver-r")
+library(vetiver)
 ```
 
+
+```{r}
+install.packages("plumber")
+library(plumber)
+```
+
+
+```{r}
+v <- vetiver_model(final_fit_rf, "Random Forest")
+v
+# Créer un endpoint avec plumber
+#* @post /predict
+#* @param input Le texte d'entrée pour les prédictions
+predict_function <- function(req) {
+  cat("Requête reçue :", req$postBody, "\n")
+# recueillir les données depuis le corps de la requête
+   data <- tryCatch(
+    jsonlite::fromJSON(req$postBody),
+    error = function(e){
+       cat("Erreur de parsing JSON:", e$message, "\n")
+       stop("Invalid JSON format")
+    }
+  )
+# prédiction avec le modèle
+prediction <- vetiver_predict(v, data)
+# Retourne la prédiction
+return(prediction)
+}
+
+pr <- plumb("C:/Users/Degbey Kayeon/Downloads/zWTIOyzKTSG0w5jU5Io_Nw_15c1635f70334a3a9d4b1ec2132e14f1_stroke-prediction/api.R") # Spécifiez le chemin vers le fichier api.R
+pr$run(port = 8000)
+```
 
 
 
 # Task Five: Findings and Conclusions
 
-
-
+lLe modéle choisi est le random forest car il a eu le meilleur resultat en terme de F1-score et precision qui sont des hyperparametres important dans le cadre de la classsifcation pour la prediction d'AVC..
 
 
 
