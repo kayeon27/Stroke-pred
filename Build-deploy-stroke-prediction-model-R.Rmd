@@ -489,7 +489,7 @@ prediction <- vetiver_predict(v, data)
 return(prediction)
 }
 
-pr <- plumb("C:/Users/Degbey Kayeon/Downloads/zWTIOyzKTSG0w5jU5Io_Nw_15c1635f70334a3a9d4b1ec2132e14f1_stroke-prediction/api.R") # Spécifiez le chemin vers le fichier api.R
+pr <- plumb("C:/Users/Degbey Kayeon/Downloads/_stroke-prediction/api.R") # Spécifiez le chemin vers le fichier api.R
 pr$run(port = 8000)
 ```
 
