@@ -496,8 +496,9 @@ pr$run(port = 8000)
 
 
 # Task Five: Findings and Conclusions
+The chosen model is the Random Forest as it achieved the best performance in terms of F1-score and precision, which are critical metrics in classification tasks for stroke prediction..
 
-lLe modéle choisi est le random forest car il a eu le meilleur resultat en terme de F1-score et precision qui sont des hyperparametres important dans le cadre de la classsifcation pour la prediction d'AVC..
+
 
 
 
